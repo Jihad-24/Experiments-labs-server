@@ -215,9 +215,9 @@ async function run() {
 run().catch(console.dir);
 
 app.get("/", (req, res) => {
-  res.send("FitnessTracker  in running");
+  res.send("ExperimentsLabs  in running");
 });
 
 app.listen(port, () => {
-  console.log(`FitnessTracker  is on port ${port}`);
+  console.log(`ExperimentsLabs  is on port ${port}`);
 });
