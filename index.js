@@ -9,12 +9,12 @@ const port = process.env.PORT || 5001;
 
 // Middleware
 app.use(express.json());
-app.use(cors());
-app.use((req, res, next) => {
-  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
-  res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
-  next();
-});
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'https://experiments-labs-client.vercel.app'
+],
+}));
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.8urwnno.mongodb.net/?retryWrites=true&w=majority`;
 
