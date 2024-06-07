@@ -3,12 +3,18 @@ const express = require("express");
 require("dotenv").config();
 const app = express();
 const cors = require("cors");
-const port = process.env.PORT || 5001;
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
-// middilewares
-app.use(cors());
+const port = process.env.PORT || 5001;
+
+// Middleware
 app.use(express.json());
+app.use(cors());
+app.use((req, res, next) => {
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+  next();
+});
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.8urwnno.mongodb.net/?retryWrites=true&w=majority`;
 
@@ -24,18 +30,12 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     const userCollection = client.db("ExperimentsLabs").collection("users");
-    const paymentCollection = client
-      .db("ExperimentsLabs")
-      .collection("payments");
-    const productCollection = client
-      .db("ExperimentsLabs")
-      .collection("Product");
-    const CartProductCollection = client
-      .db("ExperimentsLabs")
-      .collection("CartProduct");
+    const paymentCollection = client.db("ExperimentsLabs").collection("payments");
+    const productCollection = client.db("ExperimentsLabs").collection("Product");
+    const cartProductCollection = client.db("ExperimentsLabs").collection("CartProduct");
     const orderCollection = client.db("ExperimentsLabs").collection("order");
 
-    // order api
+    // Order API
     app.post("/order", async (req, res) => {
       const orderData = req.body;
       const result = await orderCollection.insertOne(orderData);
@@ -43,20 +43,11 @@ async function run() {
     });
 
     app.patch("/order/status/:id", async (req, res) => {
-      const status = req.body.status;
-      console.log(status);
+      const { status } = req.body;
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
-      const updateOrderStatus = {
-        $set: {
-          status: status,
-        },
-      };
-      const result = await orderCollection.findOneAndUpdate(
-        filter,
-        updateOrderStatus
-      );
-
+      const updateOrderStatus = { $set: { status } };
+      const result = await orderCollection.findOneAndUpdate(filter, updateOrderStatus);
       res.send(result);
     });
 
@@ -67,97 +58,80 @@ async function run() {
 
     app.get("/order/:email", async (req, res) => {
       const email = req.params.email;
-      const query = { email: email };
-      // console.log(query);
+      const query = { email };
       const result = await orderCollection.find(query).toArray();
       res.send(result);
     });
+
     app.delete("/order/:id", async (req, res) => {
       const id = req.params.id;
-
       const query = { _id: new ObjectId(id) };
-
       const result = await orderCollection.deleteOne(query);
       res.send(result);
     });
 
-    // product api
+    // Product API
     app.get("/products", async (req, res) => {
       const result = await productCollection.find().toArray();
       res.send(result);
     });
 
-    // cart api
+    // Cart API
     app.post("/CartProduct", async (req, res) => {
       const cartData = req.body;
-      const result = await CartProductCollection.insertOne(cartData);
+      const result = await cartProductCollection.insertOne(cartData);
       res.send(result);
     });
 
     app.get("/CartProduct/:email", async (req, res) => {
       const email = req.params.email;
-      const query = { email: email };
-      // console.log(query);
-      const result = await CartProductCollection.find(query).toArray();
+      const query = { email };
+      const result = await cartProductCollection.find(query).toArray();
       res.send(result);
     });
 
     app.put("/updateQuantity/:id", async (req, res) => {
       const id = req.params.id;
-      const quantity = req.body.quantity;
-
-      try {
-        if (typeof quantity !== "number" || quantity < 0) {
-          return res.status(400).send({ error: "Invalid quantity value" });
-        }
-        const filter = { _id: new ObjectId(id) };
-        const update = { $set: { quantity: quantity } };
-        const updatedDocument = await CartProductCollection.findOneAndUpdate(
-          filter,
-          update
-        );
-        res.send(updatedDocument);
-      } catch (error) {
-        console.error("Error updating quantity:", error);
-        res
-          .status(500)
-          .send({ error: "An error occurred while updating the quantity" });
+      const { quantity } = req.body;
+      if (typeof quantity !== "number" || quantity < 0) {
+        return res.status(400).send({ error: "Invalid quantity value" });
       }
+      const filter = { _id: new ObjectId(id) };
+      const update = { $set: { quantity } };
+      const updatedDocument = await cartProductCollection.findOneAndUpdate(filter, update);
+      res.send(updatedDocument);
     });
 
     app.delete("/CartProduct/:id", async (req, res) => {
       const id = req.params.id;
-
       const query = { _id: new ObjectId(id) };
-
-      const result = await CartProductCollection.deleteOne(query);
+      const result = await cartProductCollection.deleteOne(query);
       res.send(result);
     });
 
     app.delete("/deleteFullCart/:email", async (req, res) => {
       const email = req.params.email;
-      const query = { email: email };
-      const result = await CartProductCollection.deleteMany(query);
+      const query = { email };
+      const result = await cartProductCollection.deleteMany(query);
       res.send(result);
     });
 
-    // user api
-
-    app.get('/users',  async (req, res) => {
+    // User API
+    app.get('/users', async (req, res) => {
       const result = await userCollection.find().toArray();
       res.send(result);
-    })
+    });
+
     app.get('/users/:id', async (req, res) => {
       const id = req.params.id;
-      const query = {_id: id}
-      const result = await userCollection.findOne(query)
+      const query = { _id: new ObjectId(id) };
+      const result = await userCollection.findOne(query);
       res.send(result);
-    })
+    });
 
     app.get('/users/:email', async (req, res) => {
       const email = req.params.email;
-      const query ={email: email}
-      console.log(query);
+      const query = { email };
       const result = await userCollection.findOne(query);
       res.send(result);
     });
@@ -167,35 +141,27 @@ async function run() {
       const query = { email: user.email };
       const existingUser = await userCollection.findOne(query);
       if (existingUser) {
-        return res.send({ message: 'user already exist', insertedId: null })
+        return res.send({ message: 'User already exists', insertedId: null });
       }
-
       const result = await userCollection.insertOne(user);
       res.send(result);
-    })
+    });
 
-   
-
-
-    // payment intent api
+    // Payment Intent API
     app.post("/create-payment-intent", async (req, res) => {
       const { price } = req.body;
       const amount = parseInt(price * 100);
-      // console.log('amount inside the intent', amount);
       const paymentIntent = await stripe.paymentIntents.create({
-        amount: amount,
+        amount,
         currency: "usd",
         payment_method_types: ["card"],
       });
-
-      res.send({
-        clientSecret: paymentIntent.client_secret,
-      });
+      res.send({ clientSecret: paymentIntent.client_secret });
     });
 
     app.get("/payments/:email", async (req, res) => {
       const email = req.params.email;
-      const user = await paymentCollection.find({ email: email }).toArray();
+      const user = await paymentCollection.find({ email }).toArray();
       res.send(user);
     });
 
@@ -210,14 +176,15 @@ async function run() {
       res.send(paymentResult);
     });
   } finally {
+    // Ensure the client will close when you finish/error
   }
 }
 run().catch(console.dir);
 
 app.get("/", (req, res) => {
-  res.send("ExperimentsLabs  in running");
+  res.send("ExperimentsLabs is running");
 });
 
 app.listen(port, () => {
-  console.log(`ExperimentsLabs  is on port ${port}`);
+  console.log(`ExperimentsLabs is running on port ${port}`);
 });
